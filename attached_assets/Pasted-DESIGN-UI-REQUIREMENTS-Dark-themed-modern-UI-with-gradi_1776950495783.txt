@@ -1,0 +1,175 @@
+DESIGN & UI REQUIREMENTS
+
+Dark-themed modern UI with gradient accents (deep navy #0F172A background, electric purple #7C3AED and cyan #06B6D4 accents)
+Glassmorphism card effects with backdrop blur
+Smooth animations and micro-interactions on all buttons and cards
+Mobile-first fully responsive design
+Font: Inter or Poppins
+Animated hero landing page with gradient mesh or particle background
+Color coded status chips: Red = Urgent, Yellow = Pending, Blue = In Progress, Green = Resolved
+Skeleton loading states for all data fetching
+Dark mode by default
+
+
+LANDING PAGE
+
+Animated hero: tagline "Your City. Your Voice. Your Power."
+Live stats ticker showing: Total Issues Reported / Total Verified / Total Resolved
+How It Works section (3 steps: Report → Community Verifies → Government Resolves)
+Two CTA buttons: Continue as Citizen and Login as Government Official
+
+
+AUTH & ROLES
+Citizen Auth:
+
+Sign up with email and password OR continue as anonymous guest
+Anonymous users get a unique guest token
+Verified citizens get JWT on login
+
+Government Auth (MLA/Official Based):
+
+Hardcoded list of real city MLAs with their name, constituency, and a unique official ID
+Example entries:
+
+Name: Arvind Kejriwal | Constituency: New Delhi | Official ID: MLA-ND-001
+Name: K. Chandrashekar Rao | Constituency: Gajwel | Official ID: MLA-GJ-002
+Name: Suresh Prabhu | Constituency: Rajapur | Official ID: MLA-RJ-003
+Add 10-15 such entries covering different cities
+
+
+Government login form: Enter Full Name + Official ID
+If name and ID match the hardcoded list → login success
+On login, dashboard shows only issues from their constituency/city
+Show official's name, constituency, and photo placeholder on dashboard header
+
+
+CITIZEN SIDE
+Issue Submission Form:
+
+Drag and drop photo/video upload with live preview
+Auto-detect GPS and show location pin on Leaflet.js map
+Manual address search override
+Issue title input
+Category selection chips: Pothole / Water Logging / Streetlight / Graffiti / Garbage / Safety / Other
+Description / additional notes textarea
+Urgent toggle (glows red when ON)
+Anonymous toggle (hides identity if ON)
+Submit button with loading animation
+
+Community Verification Layer:
+
+Every submitted issue starts in Pending Verification state
+Other citizens can click Confirm — I've seen this too on any pending issue
+Each confirmation adds to the Authenticity Score
+Authenticity Score formula: (number of confirmations × 10) displayed as percentage
+If score reaches 50% or more (5+ confirmations) → issue auto-moves to Verified
+Verified issues appear on Government Dashboard
+Issues with 0 confirmations after 7 days → auto-marked as Unverified / Rejected
+Show a progress bar on each issue card showing authenticity score live
+
+Citizen Dashboard:
+
+My Issues tab: all issues submitted by logged in citizen
+Community Issues tab: all pending issues needing confirmation votes
+Filter bar: All / Pending / Verified / In Progress / Resolved / Rejected
+Each issue card shows:
+
+Photo thumbnail
+Title and category badge
+Location
+Authenticity score progress bar
+Current status chip
+Time since reported
+
+
+Click card → full detail view with:
+
+Full photo
+Map pin location
+Status timeline (Submitted → Verified → Assigned → In Progress → Resolved)
+Number of community confirmations
+Government response notes if any
+
+
+
+Notifications Feed:
+
+Bell icon with unread count badge
+Notification types:
+
+"Your issue was verified by the community"
+"Government marked your issue In Progress"
+"Your issue has been resolved"
+"5 people confirmed your pothole report"
+
+
+
+
+GOVERNMENT SIDE
+Login Screen:
+
+Clean form: Full Name input + Official ID input
+On match → redirect to their personalized dashboard
+Show welcome message: "Welcome, [Name] — [Constituency] Constituency"
+
+Government Dashboard:
+
+Only shows Verified issues from their constituency
+Card/table toggle view
+Each issue shows: photo, title, category, location, authenticity score, date, urgency badge, current status
+Action buttons per issue:
+
+Mark In Progress → updates status, citizen gets notified
+Mark Resolved → updates status with resolution date, citizen gets notified, issue shows green Resolved badge
+Add Note → official can add a response note visible to citizen
+Set Deadline → pick a resolution deadline date
+
+
+SLA Breach Alert: if deadline passes and issue still not resolved → issue card glows red with "OVERDUE" badge
+
+Analytics Panel (right side or separate tab):
+
+Bar chart: Issues by category
+Pie chart: Status breakdown (Pending / In Progress / Resolved)
+Number cards: Total Verified / Total Resolved / Overdue count
+Recent activity feed
+
+
+CITY HEATMAP PAGE
+
+Full interactive Leaflet.js map of the city
+Issues plotted as colored markers (red = urgent/unresolved, green = resolved)
+Cluster markers when zoomed out
+Click marker → issue preview popup with title, photo thumbnail, status
+Filter heatmap by category or status
+
+
+ADVANCED FEATURES
+
+Citizen Reputation Score: verified citizens who confirm real issues accurately get a score shown on their profile
+Issue Share button: generates a shareable link for each issue
+Dark mode toggle (default dark)
+Multilingual toggle: English / Hindi (at least two languages)
+Fully offline-capable submission: if no internet, queue the issue locally and sync when reconnected with original timestamp preserved
+
+
+TECH STACK
+
+Frontend: React + Tailwind CSS
+Backend: Node.js + Express
+Database: PostgreSQL
+Auth: JWT for citizens, hardcoded MLA list for government
+Maps: Leaflet.js
+Charts: Recharts
+Notifications: in-app only (no external service needed)
+
+
+IMPORTANT UI NOTES FOR REPLIT:
+
+Every page must feel premium — not a basic CRUD app
+Use glassmorphism cards everywhere
+Smooth page transitions
+All buttons have hover glow effects
+Issue cards have subtle hover lift animation
+Status colors must be consistent across all pages
+The government dashboard must feel like a professional admin panel, not a simple list

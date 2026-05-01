@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "CivicReport"
+version = "1.0.0"
+id = "artifacts/civicreport"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18551
+
+[services.development]
+run = "pnpm --filter @workspace/civicreport run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/civicreport", "run", "build" ]
+publicDir = "artifacts/civicreport/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18551"
+BASE_PATH = "/"
