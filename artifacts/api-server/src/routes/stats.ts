@@ -1,5 +1,4 @@
 import { Router, type IRouter } from "express";
-import { GetGovernmentStatsQueryParams } from "@workspace/api-zod";
 import { issues } from "../lib/store.js";
 import { attachUser, requireUser } from "../lib/auth.js";
 
@@ -26,16 +25,29 @@ router.get("/government", requireUser, (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  const parsed = GetGovernmentStatsQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_query" });
-    return;
-  }
-  const constituency =
-    parsed.data.constituency ?? req.user!.constituency ?? "";
-  const all = Array.from(issues.values()).filter(
-    (i) => i.constituency === constituency && i.status !== "pending",
+
+  const { constituency, city, state } = req.query as {
+    constituency?: string;
+    city?: string;
+    state?: string;
+  };
+
+  let all = Array.from(issues.values()).filter(
+    (i) => i.status !== "pending" && i.status !== "rejected",
   );
+
+  if (constituency) {
+    all = all.filter((i) => i.constituency === constituency);
+  } else if (city) {
+    all = all.filter(
+      (i) => (i.city ?? "").toLowerCase() === city.toLowerCase(),
+    );
+  } else if (state) {
+    all = all.filter(
+      (i) => (i.state ?? "").toLowerCase() === state.toLowerCase(),
+    );
+  }
+
   const totalVerified = all.length;
   const totalResolved = all.filter((i) => i.status === "resolved").length;
   const overdue = all.filter(

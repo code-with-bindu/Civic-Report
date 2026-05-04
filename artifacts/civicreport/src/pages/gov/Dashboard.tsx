@@ -2,21 +2,18 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   useListIssues,
-  useGetGovernmentStats,
   useUpdateIssueStatus,
   useAddIssueNote,
   getListIssuesQueryKey,
-  getGetGovernmentStatsQueryKey,
   Issue,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -31,7 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -47,13 +43,12 @@ import {
   LayoutGrid,
   List,
   AlertCircle,
-  CheckCircle,
+  CheckCircle2,
   Clock,
   MapPin,
   Search,
   Download,
   Flame,
-  CheckCircle2,
   ShieldX,
   ThumbsUp,
   TrendingUp,
@@ -61,6 +56,8 @@ import {
   Target,
   Zap,
   Activity,
+  Globe,
+  ChevronRight,
 } from "lucide-react";
 import { Link } from "wouter";
 import { format, formatDistanceToNow, differenceInDays } from "date-fns";
@@ -99,10 +96,56 @@ const CATEGORIES = [
   "Other",
 ];
 
+const LOCATION_DATA: Record<string, Record<string, string[]>> = {
+  "Delhi": {
+    "New Delhi": ["New Delhi"],
+  },
+  "Telangana": {
+    "Hyderabad": ["Gajwel"],
+  },
+  "Maharashtra": {
+    "Mumbai": ["Rajapur"],
+    "Nagpur": ["Nagpur South West"],
+  },
+  "Uttar Pradesh": {
+    "Gorakhpur": ["Gorakhpur Urban"],
+  },
+  "West Bengal": {
+    "Kolkata": ["Bhabanipur"],
+  },
+  "Tamil Nadu": {
+    "Chennai": ["Kolathur"],
+  },
+  "Kerala": {
+    "Kannur": ["Dharmadam"],
+  },
+  "Chhattisgarh": {
+    "Raipur": ["Patan"],
+  },
+  "Rajasthan": {
+    "Jodhpur": ["Sardarpura"],
+  },
+  "Haryana": {
+    "Karnal": ["Karnal"],
+  },
+  "Punjab": {
+    "Sangrur": ["Dhuri"],
+  },
+  "Karnataka": {
+    "Mysuru": ["Varuna"],
+  },
+  "Jharkhand": {
+    "Sahibganj": ["Barhait"],
+  },
+  "Odisha": {
+    "Bhubaneswar": ["Hinjili"],
+  },
+};
+
 type SortKey = "newest" | "oldest" | "deadline" | "urgent" | "confirmations";
 
 export default function GovDashboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -113,39 +156,63 @@ export default function GovDashboard() {
   const [sort, setSort] = useState<SortKey>("newest");
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
 
+  const [locState, setLocState] = useState("all");
+  const [locCity, setLocCity] = useState("all");
+  const [locConstituency, setLocConstituency] = useState("all");
+
   const [updateStatus, setUpdateStatus] = useState<
     "in_progress" | "resolved" | "rejected"
   >("in_progress");
   const [updateNote, setUpdateNote] = useState("");
   const [updateDeadline, setUpdateDeadline] = useState("");
 
+  const availableCities = useMemo(() => {
+    if (locState === "all") return [];
+    return Object.keys(LOCATION_DATA[locState] ?? {});
+  }, [locState]);
+
+  const availableConstituencies = useMemo(() => {
+    if (locState === "all" || locCity === "all") return [];
+    return LOCATION_DATA[locState]?.[locCity] ?? [];
+  }, [locState, locCity]);
+
+  const issueQueryParams = useMemo(() => {
+    const p: Record<string, string> = { scope: "all" };
+    if (statusFilter !== "all") p.status = statusFilter;
+    if (locConstituency !== "all") p.constituency = locConstituency;
+    else if (locCity !== "all") p.city = locCity;
+    else if (locState !== "all") p.state = locState;
+    return p;
+  }, [statusFilter, locState, locCity, locConstituency]);
+
   const { data: issues, isLoading: loadingIssues } = useListIssues(
-    {
-      scope: "constituency",
-      status: statusFilter !== "all" ? statusFilter : undefined,
-    },
+    issueQueryParams as any,
     {
       query: {
-        queryKey: getListIssuesQueryKey({
-          scope: "constituency",
-          status: statusFilter !== "all" ? statusFilter : undefined,
-        }),
+        queryKey: getListIssuesQueryKey(issueQueryParams as any),
         enabled: !!user,
+        refetchInterval: 30000,
       },
     },
   );
 
-  const { data: stats } = useGetGovernmentStats(
-    { constituency: user?.constituency },
-    {
-      query: {
-        queryKey: getGetGovernmentStatsQueryKey({
-          constituency: user?.constituency,
-        }),
-        enabled: !!user,
-      },
+  const statsQueryKey = ["gov-stats", locState, locCity, locConstituency];
+  const { data: stats } = useQuery<any>({
+    queryKey: statsQueryKey,
+    queryFn: async () => {
+      const p = new URLSearchParams();
+      if (locConstituency !== "all") p.set("constituency", locConstituency);
+      else if (locCity !== "all") p.set("city", locCity);
+      else if (locState !== "all") p.set("state", locState);
+      const res = await fetch(`/api/stats/government?${p.toString()}`, {
+        headers: { Authorization: `Bearer ${user?.token ?? ""}` },
+      });
+      if (!res.ok) throw new Error("stats failed");
+      return res.json();
     },
-  );
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
 
   const updateMut = useUpdateIssueStatus();
   const noteMut = useAddIssueNote();
@@ -169,15 +236,9 @@ export default function GovDashboard() {
       setUpdateNote("");
       setUpdateDeadline("");
       queryClient.invalidateQueries({ queryKey: getListIssuesQueryKey() });
-      queryClient.invalidateQueries({
-        queryKey: getGetGovernmentStatsQueryKey(),
-      });
+      queryClient.invalidateQueries({ queryKey: ["gov-stats"] });
     } catch (e: any) {
-      toast({
-        title: "Update failed",
-        description: e.message,
-        variant: "destructive",
-      });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     }
   };
 
@@ -189,19 +250,12 @@ export default function GovDashboard() {
       });
       toast({ title: `Resolved: ${issue.title}` });
       queryClient.invalidateQueries({ queryKey: getListIssuesQueryKey() });
-      queryClient.invalidateQueries({
-        queryKey: getGetGovernmentStatsQueryKey(),
-      });
+      queryClient.invalidateQueries({ queryKey: ["gov-stats"] });
     } catch (e: any) {
-      toast({
-        title: "Update failed",
-        description: e.message,
-        variant: "destructive",
-      });
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
     }
   };
 
-  // ---- Additional KPI computations from issues list ----
   const kpiExtras = useMemo(() => {
     const list = issues ?? [];
     const resolved = list.filter((i) => i.status === "resolved");
@@ -209,15 +263,12 @@ export default function GovDashboard() {
     const urgentOpen = list.filter(
       (i) => i.urgent && i.status !== "resolved" && i.status !== "rejected",
     );
-
-    // average resolution days = resolved time - createdAt time
     const resolutionTimes = resolved
       .map((i) => {
         const resolvedEvt = i.timeline.find((t) => t.status === "resolved");
         if (!resolvedEvt) return null;
         const days =
-          (new Date(resolvedEvt.at).getTime() -
-            new Date(i.createdAt).getTime()) /
+          (new Date(resolvedEvt.at).getTime() - new Date(i.createdAt).getTime()) /
           (1000 * 60 * 60 * 24);
         return days;
       })
@@ -225,33 +276,20 @@ export default function GovDashboard() {
     const avgResolutionDays = resolutionTimes.length
       ? resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length
       : 0;
-
-    // on-time = resolved before deadline (or no deadline)
     const withDeadline = resolved.filter((i) => i.deadline);
     const onTime = withDeadline.filter((i) => {
       const resolvedEvt = i.timeline.find((t) => t.status === "resolved");
       if (!resolvedEvt) return false;
-      return (
-        new Date(resolvedEvt.at).getTime() <=
-        new Date(i.deadline as string).getTime()
-      );
+      return new Date(resolvedEvt.at).getTime() <= new Date(i.deadline as string).getTime();
     });
     const onTimePct = withDeadline.length
       ? Math.round((onTime.length / withDeadline.length) * 100)
       : 100;
-
-    // top hotspots: open verified or in_progress issues sorted by confirmations
     const hotspots = list
       .filter((i) => i.status === "verified" || i.status === "in_progress")
       .sort((a, b) => (b.confirmations ?? 0) - (a.confirmations ?? 0))
       .slice(0, 5);
-
-    // total community engagement
-    const totalConfirmations = list.reduce(
-      (sum, i) => sum + (i.confirmations ?? 0),
-      0,
-    );
-
+    const totalConfirmations = list.reduce((sum, i) => sum + (i.confirmations ?? 0), 0);
     return {
       avgResolutionDays: Math.round(avgResolutionDays * 10) / 10,
       onTimePct,
@@ -264,24 +302,23 @@ export default function GovDashboard() {
 
   const filtered = useMemo(() => {
     let list = issues ? [...issues] : [];
-    if (categoryFilter !== "all") {
-      list = list.filter((i) => i.category === categoryFilter);
-    }
+    if (categoryFilter !== "all") list = list.filter((i) => i.category === categoryFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
         (i) =>
           i.title.toLowerCase().includes(q) ||
           i.address.toLowerCase().includes(q) ||
+          (i.city ?? "").toLowerCase().includes(q) ||
+          (i.state ?? "").toLowerCase().includes(q) ||
+          (i.constituency ?? "").toLowerCase().includes(q) ||
           i.id.toLowerCase().includes(q),
       );
     }
     list.sort((a, b) => {
       switch (sort) {
         case "oldest":
-          return (
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         case "deadline": {
           const ad = a.deadline ? new Date(a.deadline).getTime() : Infinity;
           const bd = b.deadline ? new Date(b.deadline).getTime() : Infinity;
@@ -293,9 +330,7 @@ export default function GovDashboard() {
           return (b.confirmations ?? 0) - (a.confirmations ?? 0);
         case "newest":
         default:
-          return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
     return list;
@@ -306,18 +341,7 @@ export default function GovDashboard() {
       toast({ title: "Nothing to export", description: "No issues match." });
       return;
     }
-    const header = [
-      "id",
-      "title",
-      "category",
-      "status",
-      "address",
-      "createdAt",
-      "deadline",
-      "confirmations",
-      "urgent",
-      "reporter",
-    ];
+    const header = ["id", "title", "category", "status", "address", "city", "state", "constituency", "createdAt", "deadline", "confirmations", "urgent", "reporter"];
     const rows = filtered.map((i) =>
       [
         i.id,
@@ -325,6 +349,9 @@ export default function GovDashboard() {
         i.category,
         i.status,
         JSON.stringify(i.address),
+        i.city ?? "",
+        i.state ?? "",
+        i.constituency ?? "",
         i.createdAt,
         i.deadline ?? "",
         i.confirmations ?? 0,
@@ -350,16 +377,26 @@ export default function GovDashboard() {
     ? Math.round((stats.totalResolved / stats.totalVerified) * 100)
     : 0;
 
+  const locationLabel =
+    locConstituency !== "all"
+      ? locConstituency
+      : locCity !== "all"
+      ? locCity
+      : locState !== "all"
+      ? locState
+      : "All Locations";
+
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-muted/20">
       <div className="flex-1 p-6 lg:p-8 overflow-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Official Dashboard
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Welcome, {user.name} • {user.constituency || "All Constituencies"}
+            <h1 className="text-3xl font-bold text-foreground">Official Dashboard</h1>
+            <p className="text-muted-foreground mt-1 flex items-center gap-1.5">
+              Welcome, {user.name}
+              <span className="text-muted-foreground/50">•</span>
+              <Globe className="w-3.5 h-3.5 text-primary" />
+              <span className="text-primary font-medium">{locationLabel}</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -387,80 +424,144 @@ export default function GovDashboard() {
           </div>
         </div>
 
+        {/* ── Location filter bar ── */}
+        <div className="bg-white border border-border/50 rounded-xl shadow-sm p-4 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Filter by Location</span>
+            {(locState !== "all" || locCity !== "all" || locConstituency !== "all") && (
+              <button
+                onClick={() => { setLocState("all"); setLocCity("all"); setLocConstituency("all"); }}
+                className="ml-auto text-xs text-muted-foreground underline hover:text-foreground transition-colors"
+              >
+                Clear location
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex flex-col gap-1 min-w-[180px]">
+              <label className="text-xs text-muted-foreground font-medium">State</label>
+              <Select
+                value={locState}
+                onValueChange={(v) => {
+                  setLocState(v);
+                  setLocCity("all");
+                  setLocConstituency("all");
+                }}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="All States" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All States</SelectItem>
+                  {Object.keys(LOCATION_DATA).sort().map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {locState !== "all" && (
+              <>
+                <ChevronRight className="w-4 h-4 text-muted-foreground mt-5 shrink-0" />
+                <div className="flex flex-col gap-1 min-w-[180px]">
+                  <label className="text-xs text-muted-foreground font-medium">City</label>
+                  <Select
+                    value={locCity}
+                    onValueChange={(v) => {
+                      setLocCity(v);
+                      setLocConstituency("all");
+                    }}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="All Cities" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Cities in {locState}</SelectItem>
+                      {availableCities.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {locCity !== "all" && availableConstituencies.length > 0 && (
+              <>
+                <ChevronRight className="w-4 h-4 text-muted-foreground mt-5 shrink-0" />
+                <div className="flex flex-col gap-1 min-w-[220px]">
+                  <label className="text-xs text-muted-foreground font-medium">Constituency</label>
+                  <Select value={locConstituency} onValueChange={setLocConstituency}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="All Constituencies" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Constituencies in {locCity}</SelectItem>
+                      {availableConstituencies.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {locState === "all" && (
+              <p className="text-xs text-muted-foreground mt-5 italic">
+                Showing all issues nationwide. Select a state to drill down.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ── KPI cards ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
           <Card className="border-border/50 bg-white shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-1.5 mb-1">
                 <Activity className="w-3.5 h-3.5 text-primary" />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  Verified
-                </p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Verified</p>
               </div>
-              <p className="text-2xl font-bold text-primary">
-                {stats?.totalVerified ?? 0}
-              </p>
+              <p className="text-2xl font-bold text-primary">{stats?.totalVerified ?? 0}</p>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-white shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-1.5 mb-1">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  Resolved
-                </p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Resolved</p>
               </div>
-              <p className="text-2xl font-bold text-green-600">
-                {stats?.totalResolved ?? 0}
-              </p>
+              <p className="text-2xl font-bold text-green-600">{stats?.totalResolved ?? 0}</p>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-white shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-1.5 mb-1">
                 <Clock className="w-3.5 h-3.5 text-blue-600" />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  In Progress
-                </p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">In Progress</p>
               </div>
-              <p className="text-2xl font-bold text-blue-600">
-                {kpiExtras.inProgress}
-              </p>
+              <p className="text-2xl font-bold text-blue-600">{kpiExtras.inProgress}</p>
             </CardContent>
           </Card>
-          <Card
-            className={`border-border/50 shadow-sm ${kpiExtras.urgentOpen ? "bg-destructive/10" : "bg-white"}`}
-          >
+          <Card className={`border-border/50 shadow-sm ${kpiExtras.urgentOpen ? "bg-destructive/10" : "bg-white"}`}>
             <CardContent className="p-4">
               <div className="flex items-center gap-1.5 mb-1">
-                <Flame
-                  className={`w-3.5 h-3.5 ${kpiExtras.urgentOpen ? "text-destructive" : "text-muted-foreground"}`}
-                />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  Urgent Open
-                </p>
+                <Flame className={`w-3.5 h-3.5 ${kpiExtras.urgentOpen ? "text-destructive" : "text-muted-foreground"}`} />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Urgent Open</p>
               </div>
-              <p
-                className={`text-2xl font-bold ${kpiExtras.urgentOpen ? "text-destructive" : "text-foreground"}`}
-              >
+              <p className={`text-2xl font-bold ${kpiExtras.urgentOpen ? "text-destructive" : "text-foreground"}`}>
                 {kpiExtras.urgentOpen}
               </p>
             </CardContent>
           </Card>
-          <Card
-            className={`border-border/50 shadow-sm ${stats?.overdue ? "bg-destructive/10" : "bg-white"}`}
-          >
+          <Card className={`border-border/50 shadow-sm ${stats?.overdue ? "bg-destructive/10" : "bg-white"}`}>
             <CardContent className="p-4">
               <div className="flex items-center gap-1.5 mb-1">
-                <AlertCircle
-                  className={`w-3.5 h-3.5 ${stats?.overdue ? "text-destructive" : "text-muted-foreground"}`}
-                />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  Overdue
-                </p>
+                <AlertCircle className={`w-3.5 h-3.5 ${stats?.overdue ? "text-destructive" : "text-muted-foreground"}`} />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Overdue</p>
               </div>
-              <p
-                className={`text-2xl font-bold ${stats?.overdue ? "text-destructive" : "text-foreground"}`}
-              >
+              <p className={`text-2xl font-bold ${stats?.overdue ? "text-destructive" : "text-foreground"}`}>
                 {stats?.overdue ?? 0}
               </p>
             </CardContent>
@@ -469,30 +570,20 @@ export default function GovDashboard() {
             <CardContent className="p-4">
               <div className="flex items-center gap-1.5 mb-1">
                 <Timer className="w-3.5 h-3.5 text-purple-600" />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  Avg Days
-                </p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Avg Days</p>
               </div>
-              <p className="text-2xl font-bold text-foreground">
-                {kpiExtras.avgResolutionDays || "—"}
-              </p>
+              <p className="text-2xl font-bold text-foreground">{kpiExtras.avgResolutionDays || "—"}</p>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-white shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-1.5 mb-1">
                 <Target className="w-3.5 h-3.5 text-secondary" />
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  On-Time
-                </p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">On-Time</p>
               </div>
               <div className="flex items-center gap-1">
-                <p className="text-2xl font-bold text-foreground">
-                  {kpiExtras.onTimePct}%
-                </p>
-                {kpiExtras.onTimePct >= 80 && (
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                )}
+                <p className="text-2xl font-bold text-foreground">{kpiExtras.onTimePct}%</p>
+                {kpiExtras.onTimePct >= 80 && <TrendingUp className="w-4 h-4 text-green-600" />}
               </div>
             </CardContent>
           </Card>
@@ -505,12 +596,8 @@ export default function GovDashboard() {
                 <ThumbsUp className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
-                  Citizen Confirmations
-                </p>
-                <p className="text-xl font-bold text-foreground">
-                  {kpiExtras.totalConfirmations}
-                </p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Citizen Confirmations</p>
+                <p className="text-xl font-bold text-foreground">{kpiExtras.totalConfirmations}</p>
               </div>
             </CardContent>
           </Card>
@@ -520,22 +607,19 @@ export default function GovDashboard() {
                 <Zap className="w-5 h-5 text-secondary" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
-                  Resolution Rate
-                </p>
-                <p className="text-xl font-bold text-foreground">
-                  {resolutionRate}%
-                </p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Resolution Rate</p>
+                <p className="text-xl font-bold text-foreground">{resolutionRate}%</p>
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* ── Filters bar ── */}
         <div className="flex flex-wrap gap-3 items-center mb-6 bg-white p-3 rounded-xl border border-border/50 shadow-sm">
           <div className="flex-1 min-w-[200px] relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search by title, address or issue id..."
+              placeholder="Search title, address, city, constituency, ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-white"
@@ -547,9 +631,11 @@ export default function GovDashboard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="verified">Newly Verified</SelectItem>
               <SelectItem value="in_progress">In Progress</SelectItem>
               <SelectItem value="resolved">Resolved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
             </SelectContent>
           </Select>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -558,9 +644,7 @@ export default function GovDashboard() {
             </SelectTrigger>
             <SelectContent>
               {CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c === "all" ? "All Categories" : c}
-                </SelectItem>
+                <SelectItem key={c} value={c}>{c === "all" ? "All Categories" : c}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -576,8 +660,12 @@ export default function GovDashboard() {
               <SelectItem value="confirmations">Most confirmed</SelectItem>
             </SelectContent>
           </Select>
+          <span className="text-xs text-muted-foreground ml-auto whitespace-nowrap">
+            {filtered.length} issue{filtered.length !== 1 ? "s" : ""}
+          </span>
         </div>
 
+        {/* ── Issues list ── */}
         {loadingIssues ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
@@ -601,10 +689,7 @@ export default function GovDashboard() {
                 <TableBody>
                   {filtered.map((issue) => {
                     const sla = issue.deadline
-                      ? differenceInDays(
-                          new Date(issue.deadline),
-                          new Date(),
-                        )
+                      ? differenceInDays(new Date(issue.deadline), new Date())
                       : null;
                     return (
                       <TableRow key={issue.id} className="bg-white">
@@ -614,15 +699,10 @@ export default function GovDashboard() {
                               <Flame className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
                             )}
                             <div>
-                              <div className="font-medium max-w-xs truncate">
-                                {issue.title}
-                              </div>
+                              <div className="font-medium max-w-xs truncate">{issue.title}</div>
                               <div className="text-xs text-muted-foreground mt-1">
                                 {issue.category} •{" "}
-                                {formatDistanceToNow(
-                                  new Date(issue.createdAt),
-                                  { addSuffix: true },
-                                )}
+                                {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}
                               </div>
                             </div>
                           </div>
@@ -632,169 +712,79 @@ export default function GovDashboard() {
                             <IssueStatusBadge status={issue.status} />
                             {issue.overdue && (
                               <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded flex items-center">
-                                <AlertCircle className="w-3 h-3 mr-1" />
-                                OVERDUE
+                                <AlertCircle className="w-3 h-3 mr-1" />OVERDUE
                               </span>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center text-sm text-muted-foreground max-w-[200px] truncate">
-                            <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />
-                            {issue.address}
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-medium text-foreground max-w-[180px] truncate">
+                              {issue.address}
+                            </span>
+                            {(issue.city || issue.state) && (
+                              <span className="text-xs text-muted-foreground">
+                                {[issue.city, issue.state].filter(Boolean).join(", ")}
+                              </span>
+                            )}
+                            {issue.constituency && (
+                              <span className="text-[10px] text-primary/70 font-medium">
+                                {issue.constituency}
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          {issue.deadline ? (
-                            <div
-                              className={`text-xs flex items-center font-medium ${
-                                sla !== null && sla < 0
+                          {sla !== null ? (
+                            <span
+                              className={`text-sm font-semibold ${
+                                sla < 0
                                   ? "text-destructive"
-                                  : sla !== null && sla <= 2
-                                    ? "text-amber-600"
-                                    : "text-foreground"
+                                  : sla <= 2
+                                  ? "text-orange-500"
+                                  : "text-foreground"
                               }`}
                             >
-                              <Clock className="w-3 h-3 mr-1" />
-                              {sla !== null && sla < 0
-                                ? `${Math.abs(sla)}d overdue`
-                                : sla === 0
-                                  ? "Due today"
-                                  : `${sla}d left`}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              No deadline
+                              {sla < 0 ? `${Math.abs(sla)}d over` : `${sla}d left`}
                             </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1 text-sm text-primary font-semibold">
-                            <ThumbsUp className="w-3.5 h-3.5" />
-                            {issue.confirmations}
-                          </div>
+                          <span className="font-medium">{issue.confirmations ?? 0}</span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              asChild
+                            >
+                              <Link href={`/citizen/issues/${issue.id}`}>View</Link>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setSelectedIssue(issue);
+                                setUpdateStatus("in_progress");
+                                setUpdateNote("");
+                                setUpdateDeadline("");
+                              }}
+                            >
+                              Update
+                            </Button>
                             {issue.status !== "resolved" && (
                               <Button
-                                variant="ghost"
                                 size="sm"
-                                title="Quick resolve"
+                                variant="ghost"
+                                className="text-green-600 hover:bg-green-50"
                                 onClick={() => quickResolve(issue)}
-                                disabled={updateMut.isPending}
                               >
-                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                <CheckCircle2 className="w-4 h-4" />
                               </Button>
                             )}
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setSelectedIssue(issue);
-                                    setUpdateStatus(
-                                      issue.status === "in_progress"
-                                        ? "resolved"
-                                        : "in_progress",
-                                    );
-                                    setUpdateDeadline(issue.deadline ?? "");
-                                  }}
-                                >
-                                  Update
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-[480px]">
-                                <DialogHeader>
-                                  <DialogTitle>Update Issue</DialogTitle>
-                                  <DialogDescription>
-                                    {issue.title}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                  <div className="space-y-2">
-                                    <Label>New Status</Label>
-                                    <Select
-                                      value={updateStatus}
-                                      onValueChange={(v: any) =>
-                                        setUpdateStatus(v)
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="in_progress">
-                                          In Progress
-                                        </SelectItem>
-                                        <SelectItem value="resolved">
-                                          Resolved
-                                        </SelectItem>
-                                        <SelectItem value="rejected">
-                                          Reject (invalid report)
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  {updateStatus === "in_progress" && (
-                                    <div className="space-y-2">
-                                      <Label>Expected Resolution Date</Label>
-                                      <Input
-                                        type="date"
-                                        value={updateDeadline}
-                                        onChange={(e) =>
-                                          setUpdateDeadline(e.target.value)
-                                        }
-                                        min={
-                                          new Date()
-                                            .toISOString()
-                                            .split("T")[0]
-                                        }
-                                      />
-                                    </div>
-                                  )}
-                                  <div className="space-y-2">
-                                    <Label>
-                                      {updateStatus === "rejected"
-                                        ? "Reason for Rejection"
-                                        : "Official Note (Public)"}
-                                    </Label>
-                                    <Textarea
-                                      placeholder={
-                                        updateStatus === "rejected"
-                                          ? "Explain why this report is being rejected..."
-                                          : "Explain the action taken..."
-                                      }
-                                      value={updateNote}
-                                      onChange={(e) =>
-                                        setUpdateNote(e.target.value)
-                                      }
-                                    />
-                                  </div>
-                                </div>
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    onClick={handleUpdateStatus}
-                                    disabled={updateMut.isPending}
-                                    variant={
-                                      updateStatus === "rejected"
-                                        ? "destructive"
-                                        : "default"
-                                    }
-                                  >
-                                    {updateStatus === "rejected" ? (
-                                      <>
-                                        <ShieldX className="w-4 h-4 mr-2" />{" "}
-                                        Reject
-                                      </>
-                                    ) : (
-                                      "Save Changes"
-                                    )}
-                                  </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -804,158 +794,73 @@ export default function GovDashboard() {
               </Table>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filtered.map((issue) => (
-                <IssueCard key={issue.id} issue={issue} />
+                <div key={issue.id} className="relative">
+                  <IssueCard issue={issue} />
+                  <div className="absolute top-3 right-3 flex gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 text-xs px-2"
+                      onClick={() => {
+                        setSelectedIssue(issue);
+                        setUpdateStatus("in_progress");
+                        setUpdateNote("");
+                        setUpdateDeadline("");
+                      }}
+                    >
+                      Update
+                    </Button>
+                    {issue.status !== "resolved" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-green-600 hover:bg-green-50"
+                        onClick={() => quickResolve(issue)}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )
         ) : (
-          <div className="text-center py-24 bg-white rounded-xl border border-border/50">
-            <CheckCircle className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-            <h3 className="text-xl font-bold">No issues to display</h3>
-            <p className="text-muted-foreground mt-2">
-              Nothing matches your current filters.
+          <div className="text-center py-20">
+            <MapPin className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
+            <p className="text-muted-foreground font-medium">No issues found</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">
+              Try adjusting your location or filters
             </p>
           </div>
         )}
       </div>
 
-      <div className="w-full lg:w-96 bg-white border-l border-border/50 p-6 lg:p-8 flex flex-col gap-8 shrink-0">
+      {/* ── Sidebar ── */}
+      <div className="w-full lg:w-80 shrink-0 p-6 border-t lg:border-t-0 lg:border-l border-border/50 bg-white flex flex-col gap-6">
         <div>
-          <h2 className="text-xl font-bold mb-2">Constituency Insights</h2>
-          <p className="text-xs text-muted-foreground mb-6">
-            Live snapshot of your jurisdiction.
-          </p>
-        </div>
-
-        {stats?.byCategory && stats.byCategory.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-4 tracking-wider">
-              Issues by Category
-            </h3>
-            <div className="h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={stats.byCategory}
-                  margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
-                >
-                  <XAxis
-                    dataKey="category"
-                    tick={{ fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <RechartsTooltip
-                    cursor={{ fill: "transparent" }}
-                    contentStyle={{
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                    }}
-                  />
-                  <Bar
-                    dataKey="count"
-                    fill="hsl(var(--primary))"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {stats?.byStatus && stats.byStatus.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-4 tracking-wider">
-              Status Breakdown
-            </h3>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stats.byStatus}
-                    dataKey="count"
-                    nameKey="status"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={60}
-                    label={(entry) => entry.status.replace("_", " ")}
-                  >
-                    {stats.byStatus.map((_, idx) => (
-                      <Cell
-                        key={idx}
-                        fill={COLORS[idx % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Legend
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: "11px" }}
-                  />
-                  <RechartsTooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {kpiExtras.hotspots.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                <Flame className="w-4 h-4 text-destructive" />
-                Top Hotspots
-              </h3>
-              <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted/60 rounded px-2 py-0.5">
-                Most confirmed
-              </span>
-            </div>
-            <div className="space-y-3">
-              {kpiExtras.hotspots.map((h, idx) => (
-                <Link
-                  key={h.id}
-                  href={`/gov/issues/${h.id}`}
-                  className="block group"
-                >
-                  <div className="flex items-start gap-3 p-3 rounded-xl border border-border/50 bg-card hover:shadow-md hover:border-primary/30 transition-all">
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${
-                        idx === 0
-                          ? "bg-destructive/15 text-destructive"
-                          : idx === 1
-                            ? "bg-amber-500/15 text-amber-700"
-                            : "bg-muted text-foreground"
-                      }`}
-                    >
-                      #{idx + 1}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
-                          {h.title}
+          <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Flame className="w-4 h-4 text-destructive" /> Top Hotspots
+          </h3>
+          {kpiExtras.hotspots.length > 0 ? (
+            <div className="space-y-2">
+              {kpiExtras.hotspots.map((issue, idx) => (
+                <Link href={`/citizen/issues/${issue.id}`} key={issue.id}>
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-destructive/10 text-destructive text-xs font-bold flex items-center justify-center mt-0.5">
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{issue.title}</p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                        <p className="text-xs text-muted-foreground truncate">
+                          {issue.city ?? issue.address}
                         </p>
-                        {h.urgent && (
-                          <Flame className="w-3 h-3 text-destructive shrink-0" />
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {h.address}
-                      </p>
-                      <div className="flex items-center gap-3 mt-1.5 text-[11px]">
-                        <span className="flex items-center gap-1 font-semibold text-primary">
-                          <ThumbsUp className="w-3 h-3" />
-                          {h.confirmations}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {formatDistanceToNow(new Date(h.createdAt), {
-                            addSuffix: true,
-                          })}
+                        <span className="text-xs text-muted-foreground">
+                          · {issue.confirmations} confirms
                         </span>
                       </div>
                     </div>
@@ -963,32 +868,120 @@ export default function GovDashboard() {
                 </Link>
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No active hotspots</p>
+          )}
+        </div>
+
+        {stats?.byCategory?.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Issues by Category</h3>
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={stats.byCategory}
+                  dataKey="count"
+                  nameKey="category"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={65}
+                  label={false}
+                >
+                  {stats.byCategory.map((_: any, i: number) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip formatter={(v: any, n: any) => [v, n]} />
+                <Legend
+                  iconSize={8}
+                  formatter={(v) => <span className="text-xs">{v}</span>}
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         )}
 
-        {stats?.recentActivity && stats.recentActivity.length > 0 && (
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-muted-foreground uppercase mb-4 tracking-wider">
-              Recent Activity
-            </h3>
-            <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
-              {stats.recentActivity.map((act, i) => (
-                <div key={i} className="flex gap-3 text-sm">
-                  <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
-                  <div>
-                    <p className="text-foreground">{act.message}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatDistanceToNow(new Date(act.at), {
-                        addSuffix: true,
-                      })}
-                    </p>
-                  </div>
+        {stats?.byStatus?.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Status Breakdown</h3>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={stats.byStatus} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <XAxis dataKey="status" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <RechartsTooltip />
+                <Bar dataKey="count" fill="#0088FE" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {stats?.recentActivity?.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Recent Activity</h3>
+            <div className="space-y-2">
+              {stats.recentActivity.map((a: any, i: number) => (
+                <div key={i} className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-3 py-1">
+                  <p className="font-medium text-foreground truncate">{a.message}</p>
+                  <p>{formatDistanceToNow(new Date(a.at), { addSuffix: true })}</p>
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {/* ── Update dialog ── */}
+      <Dialog open={!!selectedIssue} onOpenChange={(o) => !o && setSelectedIssue(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Issue</DialogTitle>
+            <DialogDescription className="truncate">{selectedIssue?.title}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium">New Status</label>
+              <Select value={updateStatus} onValueChange={(v) => setUpdateStatus(v as any)}>
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {updateStatus === "in_progress" && (
+              <div>
+                <label className="text-sm font-medium">Resolution Deadline</label>
+                <Input
+                  type="date"
+                  value={updateDeadline}
+                  onChange={(e) => setUpdateDeadline(e.target.value)}
+                  className="mt-1.5"
+                  min={format(new Date(), "yyyy-MM-dd")}
+                />
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Official Note (optional)</label>
+              <Textarea
+                placeholder="Add a public note for citizens..."
+                value={updateNote}
+                onChange={(e) => setUpdateNote(e.target.value)}
+                className="mt-1.5 resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setSelectedIssue(null)}>Cancel</Button>
+              <Button onClick={handleUpdateStatus} disabled={updateMut.isPending}>
+                {updateMut.isPending ? "Updating..." : "Update Issue"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
