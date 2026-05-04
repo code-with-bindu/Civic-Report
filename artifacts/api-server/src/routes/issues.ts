@@ -8,6 +8,7 @@ import {
 import {
   issues,
   pushNotification,
+  notifySubscribers,
   recomputeAuthenticity,
   serializeIssue,
   uid,
@@ -72,7 +73,7 @@ router.get("/", (req, res) => {
   list.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
-  res.json(list.map(serializeIssue));
+  res.json(list.map((i) => serializeIssue(i, req.user?.id)));
 });
 
 router.post("/", requireUser, (req, res) => {
@@ -111,9 +112,10 @@ router.post("/", requireUser, (req, res) => {
     notes: [],
     timeline: [{ status: "submitted", at: now }],
     confirmedBy: new Set(),
+    subscribers: new Set([req.user!.id]),
   };
   issues.set(id, issue);
-  res.json(serializeIssue(issue));
+  res.json(serializeIssue(issue, req.user!.id));
 });
 
 router.get("/:id", (req, res) => {
@@ -122,7 +124,7 @@ router.get("/:id", (req, res) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  res.json(serializeIssue(issue));
+  res.json(serializeIssue(issue, req.user?.id));
 });
 
 router.post("/:id/confirm", requireUser, (req, res) => {
@@ -136,13 +138,13 @@ router.post("/:id/confirm", requireUser, (req, res) => {
     return;
   }
   if (issue.confirmedBy.has(req.user!.id)) {
-    res.json(serializeIssue(issue));
+    res.json(serializeIssue(issue, req.user!.id));
     return;
   }
   issue.confirmedBy.add(req.user!.id);
   issue.confirmations += 1;
   recomputeAuthenticity(issue);
-  res.json(serializeIssue(issue));
+  res.json(serializeIssue(issue, req.user!.id));
 });
 
 router.post("/:id/status", requireUser, (req, res) => {
@@ -175,17 +177,18 @@ router.post("/:id/status", requireUser, (req, res) => {
   if (parsed.data.note) {
     issue.notes.push({ text: parsed.data.note, at: now, by: req.user!.name });
   }
+  const statusMsg =
+    parsed.data.status === "in_progress"
+      ? `Issue "${issue.title}" is now In Progress`
+      : parsed.data.status === "resolved"
+        ? `Issue "${issue.title}" has been Resolved`
+        : `Issue "${issue.title}" status changed to ${parsed.data.status}`;
+
   if (issue.reporterId) {
-    pushNotification(
-      issue.reporterId,
-      parsed.data.status === "in_progress"
-        ? `Government marked your issue "${issue.title}" In Progress`
-        : `Your issue "${issue.title}" has been resolved`,
-      parsed.data.status,
-      issue.id,
-    );
+    pushNotification(issue.reporterId, statusMsg, parsed.data.status, issue.id);
   }
-  res.json(serializeIssue(issue));
+  notifySubscribers(issue, statusMsg, parsed.data.status, issue.reporterId);
+  res.json(serializeIssue(issue, req.user!.id));
 });
 
 router.post("/:id/note", requireUser, (req, res) => {
@@ -205,15 +208,32 @@ router.post("/:id/note", requireUser, (req, res) => {
   }
   const now = new Date().toISOString();
   issue.notes.push({ text: parsed.data.note, at: now, by: req.user!.name });
+  const noteMsg = `Official update on "${issue.title}": ${parsed.data.note}`;
   if (issue.reporterId) {
-    pushNotification(
-      issue.reporterId,
-      `Government added a note on your issue "${issue.title}"`,
-      "note",
-      issue.id,
-    );
+    pushNotification(issue.reporterId, noteMsg, "note", issue.id);
   }
-  res.json(serializeIssue(issue));
+  notifySubscribers(issue, noteMsg, "note", issue.reporterId);
+  res.json(serializeIssue(issue, req.user!.id));
+});
+
+router.post("/:id/subscribe", requireUser, (req, res) => {
+  const issue = issues.get(req.params.id as string);
+  if (!issue) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  issue.subscribers.add(req.user!.id);
+  res.json(serializeIssue(issue, req.user!.id));
+});
+
+router.post("/:id/unsubscribe", requireUser, (req, res) => {
+  const issue = issues.get(req.params.id as string);
+  if (!issue) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  issue.subscribers.delete(req.user!.id);
+  res.json(serializeIssue(issue, req.user!.id));
 });
 
 export default router;

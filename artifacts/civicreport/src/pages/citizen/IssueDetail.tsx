@@ -8,7 +8,7 @@ import {
   getGetIssueQueryKey,
   getListIssuesQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -34,29 +34,25 @@ import {
   CalendarClock,
   Bell,
   BellOff,
+  Users,
 } from "lucide-react";
 import { formatDistanceToNow, format, differenceInDays } from "date-fns";
 import { motion } from "framer-motion";
 
-const FOLLOW_KEY = "civicreport:following";
-
-function readFollowing(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(FOLLOW_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function writeFollowing(ids: string[]) {
-  localStorage.setItem(FOLLOW_KEY, JSON.stringify(ids));
+async function apiPost(path: string, token: string | null) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
 
 export default function IssueDetail() {
   const [, params] = useRoute("/citizen/issues/:id");
   const id = params?.id || "";
 
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -67,9 +63,24 @@ export default function IssueDetail() {
   const addNoteMut = useAddIssueNote();
 
   const [note, setNote] = useState("");
-  const [following, setFollowing] = useState<boolean>(() =>
-    readFollowing().includes(id),
-  );
+
+  const subscribeMut = useMutation({
+    mutationFn: () => apiPost(`/api/issues/${id}/subscribe`, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getGetIssueQueryKey(id) });
+      toast({ title: "Subscribed", description: "You'll get real-time updates on this issue." });
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const unsubscribeMut = useMutation({
+    mutationFn: () => apiPost(`/api/issues/${id}/unsubscribe`, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getGetIssueQueryKey(id) });
+      toast({ title: "Unsubscribed", description: "You won't receive further updates." });
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
 
   const handleConfirm = async () => {
     try {
@@ -125,19 +136,18 @@ export default function IssueDetail() {
     }
   };
 
+  const isSubscribed = issue?.isSubscribed ?? false;
+  const isFollowPending = subscribeMut.isPending || unsubscribeMut.isPending;
+
   const toggleFollow = () => {
-    const list = readFollowing();
-    if (list.includes(id)) {
-      writeFollowing(list.filter((x) => x !== id));
-      setFollowing(false);
-      toast({ title: "Unfollowed", description: "You won't be tracking updates." });
+    if (!user) {
+      toast({ title: "Sign in required", description: "Please log in to follow this issue.", variant: "destructive" });
+      return;
+    }
+    if (isSubscribed) {
+      unsubscribeMut.mutate();
     } else {
-      writeFollowing([...list, id]);
-      setFollowing(true);
-      toast({
-        title: "Following",
-        description: "We'll highlight updates on this issue.",
-      });
+      subscribeMut.mutate();
     }
   };
 
@@ -231,14 +241,25 @@ export default function IssueDetail() {
               <div className="flex gap-2 shrink-0">
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant={isSubscribed ? "default" : "outline"}
                   onClick={toggleFollow}
-                  title={following ? "Unfollow" : "Follow updates"}
+                  disabled={isFollowPending}
+                  title={isSubscribed ? "Unsubscribe from updates" : "Subscribe to updates"}
+                  className="gap-1.5"
                 >
-                  {following ? (
+                  {isSubscribed ? (
                     <BellOff className="w-4 h-4" />
                   ) : (
                     <Bell className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline text-xs">
+                    {isSubscribed ? "Following" : "Follow"}
+                  </span>
+                  {(issue.subscriberCount ?? 0) > 0 && (
+                    <span className="flex items-center gap-0.5 text-xs opacity-70">
+                      <Users className="w-3 h-3" />
+                      {issue.subscriberCount}
+                    </span>
                   )}
                 </Button>
                 <Button

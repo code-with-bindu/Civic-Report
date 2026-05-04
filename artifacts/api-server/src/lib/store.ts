@@ -26,6 +26,7 @@ export type Issue = {
   notes: { text: string; at: string; by: string }[];
   timeline: { status: string; at: string; note?: string }[];
   confirmedBy: Set<string>;
+  subscribers: Set<string>;
 };
 
 export type Citizen = {
@@ -126,16 +127,38 @@ export function pushNotification(
   notifyUser(userId, notif);
 }
 
-export function serializeIssue(issue: Issue): Omit<Issue, "confirmedBy"> & {
+export function serializeIssue(
+  issue: Issue,
+  viewerUserId?: string,
+): Omit<Issue, "confirmedBy" | "subscribers"> & {
   overdue: boolean;
+  subscriberCount: number;
+  isSubscribed: boolean;
 } {
   const overdue =
     !!issue.deadline &&
     issue.status !== "resolved" &&
     new Date(issue.deadline).getTime() < Date.now();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { confirmedBy: _ignored, ...rest } = issue;
-  return { ...rest, overdue };
+  const { confirmedBy: _c, subscribers: _s, ...rest } = issue;
+  return {
+    ...rest,
+    overdue,
+    subscriberCount: issue.subscribers.size,
+    isSubscribed: viewerUserId ? issue.subscribers.has(viewerUserId) : false,
+  };
+}
+
+export function notifySubscribers(
+  issue: Issue,
+  message: string,
+  type: string,
+  excludeUserId?: string,
+): void {
+  for (const userId of issue.subscribers) {
+    if (userId === excludeUserId) continue;
+    pushNotification(userId, message, type, issue.id);
+  }
 }
 
 // ---------- seed data ----------
@@ -384,6 +407,7 @@ function seed(): void {
       notes: [],
       timeline: [{ status: "submitted", at: createdAt }],
       confirmedBy: new Set(),
+      subscribers: new Set(),
     };
     if (issue.status === "verified" || issue.status === "in_progress" || issue.status === "resolved") {
       issue.verifiedAt = new Date(
