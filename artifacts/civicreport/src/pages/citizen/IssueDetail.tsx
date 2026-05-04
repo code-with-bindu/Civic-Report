@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRoute } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
@@ -8,7 +8,7 @@ import {
   getGetIssueQueryKey,
   getListIssuesQueryKey,
 } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -35,7 +35,10 @@ import {
   Bell,
   BellOff,
   Users,
+  Send,
+  BadgeCheck,
 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow, format, differenceInDays } from "date-fns";
 import { motion } from "framer-motion";
 
@@ -63,6 +66,50 @@ export default function IssueDetail() {
   const addNoteMut = useAddIssueNote();
 
   const [note, setNote] = useState("");
+  const [commentText, setCommentText] = useState("");
+  const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  const commentsQueryKey = ["comments", id];
+  const { data: comments = [] } = useQuery<any[]>({
+    queryKey: commentsQueryKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/issues/${id}/comments`);
+      return res.json();
+    },
+    enabled: !!id,
+    refetchInterval: 15000,
+  });
+
+  const postCommentMut = useMutation({
+    mutationFn: async (text: string) => {
+      const res = await fetch(`/api/issues/${id}/comments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      setCommentText("");
+      queryClient.invalidateQueries({ queryKey: commentsQueryKey });
+      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const handlePostComment = () => {
+    const text = commentText.trim();
+    if (!text) return;
+    if (!user) {
+      toast({ title: "Sign in required", description: "Please log in to comment.", variant: "destructive" });
+      return;
+    }
+    postCommentMut.mutate(text);
+  };
 
   const subscribeMut = useMutation({
     mutationFn: () => apiPost(`/api/issues/${id}/subscribe`, token),
@@ -336,6 +383,110 @@ export default function IssueDetail() {
                   </div>
                 </div>
               ))}
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-primary" />
+              Community Discussion
+              {comments.length > 0 && (
+                <span className="text-sm font-normal text-muted-foreground ml-1">
+                  ({comments.length})
+                </span>
+              )}
+            </h3>
+
+            <div className="space-y-4 mb-6">
+              {comments.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="text-sm">No comments yet. Be the first to share an update!</p>
+                </div>
+              ) : (
+                comments.map((c: any) => (
+                  <div key={c.id} className="flex gap-3">
+                    <Avatar className="w-9 h-9 shrink-0">
+                      <AvatarFallback
+                        className={
+                          c.authorRole === "government"
+                            ? "bg-secondary/20 text-secondary text-xs font-bold"
+                            : "bg-primary/10 text-primary text-xs font-bold"
+                        }
+                      >
+                        {c.authorName.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="bg-muted/40 rounded-2xl rounded-tl-sm px-4 py-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-sm font-semibold text-foreground">
+                            {c.authorName}
+                          </span>
+                          {c.authorRole === "government" && (
+                            <span className="flex items-center gap-1 text-xs font-medium text-secondary bg-secondary/10 px-2 py-0.5 rounded-full">
+                              <BadgeCheck className="w-3 h-3" />
+                              Official
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                          {c.text}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={commentsEndRef} />
+            </div>
+
+            <div className="border-t pt-4">
+              {user ? (
+                <div className="flex gap-3 items-end">
+                  <Avatar className="w-9 h-9 shrink-0">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                      {user.name.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 relative">
+                    <Textarea
+                      placeholder="Share an update, ask a question, or add context..."
+                      className="min-h-[80px] pr-12 resize-none text-sm rounded-2xl"
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          handlePostComment();
+                        }
+                      }}
+                    />
+                    <Button
+                      size="icon"
+                      className="absolute bottom-2 right-2 h-8 w-8 rounded-xl"
+                      onClick={handlePostComment}
+                      disabled={postCommentMut.isPending || !commentText.trim()}
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-center text-muted-foreground py-3">
+                  <span className="font-medium text-foreground">Sign in</span> to join the discussion.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground mt-2 text-right">
+                Ctrl+Enter to post
+              </p>
             </div>
           </motion.div>
         </div>

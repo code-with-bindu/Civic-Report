@@ -113,6 +113,7 @@ router.post("/", requireUser, (req, res) => {
     timeline: [{ status: "submitted", at: now }],
     confirmedBy: new Set(),
     subscribers: new Set([req.user!.id]),
+    comments: [],
   };
   issues.set(id, issue);
   res.json(serializeIssue(issue, req.user!.id));
@@ -214,6 +215,53 @@ router.post("/:id/note", requireUser, (req, res) => {
   }
   notifySubscribers(issue, noteMsg, "note", issue.reporterId);
   res.json(serializeIssue(issue, req.user!.id));
+});
+
+router.get("/:id/comments", (req, res) => {
+  const issue = issues.get(req.params.id as string);
+  if (!issue) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  res.json(issue.comments);
+});
+
+router.post("/:id/comments", requireUser, (req, res) => {
+  const issue = issues.get(req.params.id as string);
+  if (!issue) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const text = (req.body?.text ?? "").trim();
+  if (!text || text.length > 1000) {
+    res.status(400).json({ error: "invalid_text" });
+    return;
+  }
+  const comment = {
+    id: uid("c_"),
+    issueId: issue.id,
+    authorId: req.user!.id,
+    authorName: req.user!.name,
+    authorRole: req.user!.role as "citizen" | "government" | "guest",
+    text,
+    createdAt: new Date().toISOString(),
+  };
+  issue.comments.push(comment);
+  if (issue.reporterId && issue.reporterId !== req.user!.id) {
+    pushNotification(
+      issue.reporterId,
+      `${req.user!.name} commented on your issue "${issue.title}"`,
+      "comment",
+      issue.id,
+    );
+  }
+  notifySubscribers(
+    issue,
+    `New comment on "${issue.title}" by ${req.user!.name}`,
+    "comment",
+    req.user!.id,
+  );
+  res.json(comment);
 });
 
 router.post("/:id/subscribe", requireUser, (req, res) => {

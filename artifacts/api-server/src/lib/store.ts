@@ -1,6 +1,16 @@
 import crypto from "node:crypto";
 import { notifyUser } from "./sse.js";
 
+export type Comment = {
+  id: string;
+  issueId: string;
+  authorId: string;
+  authorName: string;
+  authorRole: "citizen" | "government" | "guest";
+  text: string;
+  createdAt: string;
+};
+
 export type Issue = {
   id: string;
   title: string;
@@ -27,6 +37,7 @@ export type Issue = {
   timeline: { status: string; at: string; note?: string }[];
   confirmedBy: Set<string>;
   subscribers: Set<string>;
+  comments: Comment[];
 };
 
 export type Citizen = {
@@ -408,6 +419,7 @@ function seed(): void {
       timeline: [{ status: "submitted", at: createdAt }],
       confirmedBy: new Set(),
       subscribers: new Set(),
+      comments: [],
     };
     if (issue.status === "verified" || issue.status === "in_progress" || issue.status === "resolved") {
       issue.verifiedAt = new Date(
