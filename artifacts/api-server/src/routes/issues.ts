@@ -11,6 +11,7 @@ import {
   notifySubscribers,
   recomputeAuthenticity,
   serializeIssue,
+  serializeComment,
   uid,
   getStateForConstituency,
   type Issue,
@@ -223,7 +224,10 @@ router.get("/:id/comments", (req, res) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  res.json(issue.comments);
+  const sorted = [...issue.comments].sort(
+    (a, b) => b.upvotedBy.size - a.upvotedBy.size || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  res.json(sorted.map((c) => serializeComment(c, req.user?.id)));
 });
 
 router.post("/:id/comments", requireUser, (req, res) => {
@@ -245,6 +249,7 @@ router.post("/:id/comments", requireUser, (req, res) => {
     authorRole: req.user!.role as "citizen" | "government" | "guest",
     text,
     createdAt: new Date().toISOString(),
+    upvotedBy: new Set<string>(),
   };
   issue.comments.push(comment);
   if (issue.reporterId && issue.reporterId !== req.user!.id) {
@@ -261,7 +266,30 @@ router.post("/:id/comments", requireUser, (req, res) => {
     "comment",
     req.user!.id,
   );
-  res.json(comment);
+  res.json(serializeComment(comment, req.user!.id));
+});
+
+router.post("/:id/comments/:commentId/upvote", requireUser, (req, res) => {
+  const issue = issues.get(req.params.id as string);
+  if (!issue) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const comment = issue.comments.find((c) => c.id === req.params.commentId);
+  if (!comment) {
+    res.status(404).json({ error: "comment_not_found" });
+    return;
+  }
+  if (comment.authorId === req.user!.id) {
+    res.status(400).json({ error: "cannot_upvote_own" });
+    return;
+  }
+  if (comment.upvotedBy.has(req.user!.id)) {
+    comment.upvotedBy.delete(req.user!.id);
+  } else {
+    comment.upvotedBy.add(req.user!.id);
+  }
+  res.json(serializeComment(comment, req.user!.id));
 });
 
 router.post("/:id/subscribe", requireUser, (req, res) => {

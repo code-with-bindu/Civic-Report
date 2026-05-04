@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { useRoute } from "wouter";
+import { useState, useRef } from "react";
+import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import {
   useGetIssue,
@@ -37,6 +37,7 @@ import {
   Users,
   Send,
   BadgeCheck,
+  ArrowUp,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow, format, differenceInDays } from "date-fns";
@@ -55,6 +56,7 @@ export default function IssueDetail() {
   const [, params] = useRoute("/citizen/issues/:id");
   const id = params?.id || "";
 
+  const [, navigate] = useLocation();
   const { user, token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -98,6 +100,19 @@ export default function IssueDetail() {
       queryClient.invalidateQueries({ queryKey: commentsQueryKey });
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const upvoteCommentMut = useMutation({
+    mutationFn: async (commentId: string) => {
+      const res = await fetch(`/api/issues/${id}/comments/${commentId}/upvote`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: commentsQueryKey }),
     onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
 
@@ -441,6 +456,27 @@ export default function IssueDetail() {
                           {c.text}
                         </p>
                       </div>
+                      <div className="flex items-center mt-1.5 ml-2">
+                        <button
+                          onClick={() => {
+                            if (!user) {
+                              navigate("/citizen/auth");
+                              return;
+                            }
+                            if (c.authorId !== user.id) upvoteCommentMut.mutate(c.id);
+                          }}
+                          disabled={upvoteCommentMut.isPending}
+                          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
+                            c.isUpvoted
+                              ? "bg-primary/15 text-primary font-semibold"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          } ${c.authorId === user?.id ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                          title={c.authorId === user?.id ? "You can't upvote your own comment" : c.isUpvoted ? "Remove upvote" : "Helpful"}
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                          <span>{c.upvoteCount > 0 ? c.upvoteCount : "Helpful"}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -481,7 +517,13 @@ export default function IssueDetail() {
                 </div>
               ) : (
                 <p className="text-sm text-center text-muted-foreground py-3">
-                  <span className="font-medium text-foreground">Sign in</span> to join the discussion.
+                  <button
+                    onClick={() => navigate("/citizen/auth")}
+                    className="font-semibold text-primary underline underline-offset-2 hover:opacity-80 transition-opacity"
+                  >
+                    Sign in
+                  </button>{" "}
+                  to join the discussion.
                 </p>
               )}
               <p className="text-xs text-muted-foreground mt-2 text-right">

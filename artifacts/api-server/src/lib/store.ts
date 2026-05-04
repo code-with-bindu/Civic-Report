@@ -9,7 +9,17 @@ export type Comment = {
   authorRole: "citizen" | "government" | "guest";
   text: string;
   createdAt: string;
+  upvotedBy: Set<string>;
 };
+
+export function serializeComment(c: Comment, viewerUserId?: string) {
+  const { upvotedBy, ...rest } = c;
+  return {
+    ...rest,
+    upvoteCount: upvotedBy.size,
+    isUpvoted: viewerUserId ? upvotedBy.has(viewerUserId) : false,
+  };
+}
 
 export type Issue = {
   id: string;
