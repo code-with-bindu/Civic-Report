@@ -1,16 +1,20 @@
 {
   "version": 2,
-  "buildCommand": "cd backend && node ./build.mjs",
-  "builds": [
-    {
-      "src": "backend/dist/index.mjs",
-      "use": "@vercel/node"
+  "buildCommand": "pnpm --filter @workspace/civicreport run build && pnpm --filter @workspace/api-server run build",
+  "outputDirectory": "frontend/dist",
+  "functions": {
+    "backend/dist/index.mjs": {
+      "runtime": "nodejs20.x"
     }
-  ],
+  },
   "routes": [
     {
-      "src": "/(.*)",
+      "src": "/api/(.*)",
       "dest": "backend/dist/index.mjs"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/dist/$1"
     }
   ]
 }
