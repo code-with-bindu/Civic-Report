@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "backend/dist/index.mjs",
-      "use": "@vercel/node"
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "backend/dist",
+  "functions": {
+    "backend/dist/index.mjs": {
+      "runtime": "nodejs20.x"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
