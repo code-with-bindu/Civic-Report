@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "cd backend && node ./build.mjs",
   "builds": [
     {
       "src": "backend/dist/index.mjs",
