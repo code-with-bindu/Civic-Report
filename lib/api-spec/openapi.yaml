@@ -1,0 +1,444 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: CivicReport API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: auth
+  - name: officials
+  - name: issues
+  - name: notifications
+  - name: stats
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /auth/citizen/register:
+    post:
+      operationId: registerCitizen
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+
+  /auth/citizen/login:
+    post:
+      operationId: loginCitizen
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+
+  /auth/citizen/guest:
+    post:
+      operationId: guestCitizen
+      tags: [auth]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+
+  /auth/government/login:
+    post:
+      operationId: loginGovernment
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, officialId]
+              properties:
+                name: { type: string }
+                officialId: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+
+  /officials:
+    get:
+      operationId: listOfficials
+      tags: [officials]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Official" }
+
+  /issues:
+    get:
+      operationId: listIssues
+      tags: [issues]
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [mine, community, all, constituency, area] } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: constituency, in: query, schema: { type: string } }
+        - { name: city, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Issue" }
+    post:
+      operationId: createIssue
+      tags: [issues]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateIssueInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+
+  /issues/{id}:
+    get:
+      operationId: getIssue
+      tags: [issues]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+
+  /issues/{id}/confirm:
+    post:
+      operationId: confirmIssue
+      tags: [issues]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+
+  /issues/{id}/status:
+    post:
+      operationId: updateIssueStatus
+      tags: [issues]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [in_progress, resolved, rejected] }
+                note: { type: string }
+                deadline: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+
+  /issues/{id}/note:
+    post:
+      operationId: addIssueNote
+      tags: [issues]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Notification" }
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+
+  /stats/public:
+    get:
+      operationId: getPublicStats
+      tags: [stats]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicStats" }
+
+  /stats/government:
+    get:
+      operationId: getGovernmentStats
+      tags: [stats]
+      parameters:
+        - { name: constituency, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernmentStats" }
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    User:
+      type: object
+      required: [id, role, name]
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [citizen, guest, government] }
+        name: { type: string }
+        email: { type: string }
+        constituency: { type: string }
+        officialId: { type: string }
+        reputation: { type: number }
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+
+    Official:
+      type: object
+      required: [name, constituency, officialId, city, state]
+      properties:
+        name: { type: string }
+        constituency: { type: string }
+        officialId: { type: string }
+        city: { type: string }
+        state: { type: string }
+
+    CreateIssueInput:
+      type: object
+      required: [title, category, address, lat, lng]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        category: { type: string }
+        address: { type: string }
+        constituency: { type: string }
+        city: { type: string }
+        state: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        photoUrl: { type: string }
+        urgent: { type: boolean }
+        anonymous: { type: boolean }
+
+    StatusEvent:
+      type: object
+      required: [status, at]
+      properties:
+        status: { type: string }
+        at: { type: string }
+        note: { type: string }
+
+    Issue:
+      type: object
+      required: [id, title, category, address, status, confirmations, authenticityScore, createdAt, urgent, anonymous, timeline]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        category: { type: string }
+        address: { type: string }
+        constituency: { type: string }
+        city: { type: string }
+        state: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        photoUrl: { type: string }
+        urgent: { type: boolean }
+        anonymous: { type: boolean }
+        status: { type: string, enum: [pending, verified, in_progress, resolved, rejected] }
+        confirmations: { type: number }
+        authenticityScore: { type: number }
+        reporterId: { type: string }
+        reporterName: { type: string }
+        createdAt: { type: string }
+        verifiedAt: { type: string }
+        deadline: { type: string }
+        overdue: { type: boolean }
+        notes:
+          type: array
+          items:
+            type: object
+            required: [text, at, by]
+            properties:
+              text: { type: string }
+              at: { type: string }
+              by: { type: string }
+        timeline:
+          type: array
+          items: { $ref: "#/components/schemas/StatusEvent" }
+
+    Notification:
+      type: object
+      required: [id, message, createdAt, read]
+      properties:
+        id: { type: string }
+        message: { type: string }
+        type: { type: string }
+        issueId: { type: string }
+        createdAt: { type: string }
+        read: { type: boolean }
+
+    PublicStats:
+      type: object
+      required: [totalReported, totalVerified, totalResolved]
+      properties:
+        totalReported: { type: number }
+        totalVerified: { type: number }
+        totalResolved: { type: number }
+
+    CategoryCount:
+      type: object
+      required: [category, count]
+      properties:
+        category: { type: string }
+        count: { type: number }
+
+    StatusCount:
+      type: object
+      required: [status, count]
+      properties:
+        status: { type: string }
+        count: { type: number }
+
+    GovernmentStats:
+      type: object
+      required: [totalVerified, totalResolved, overdue, byCategory, byStatus, recentActivity]
+      properties:
+        totalVerified: { type: number }
+        totalResolved: { type: number }
+        overdue: { type: number }
+        byCategory:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryCount" }
+        byStatus:
+          type: array
+          items: { $ref: "#/components/schemas/StatusCount" }
+        recentActivity:
+          type: array
+          items:
+            type: object
+            required: [message, at]
+            properties:
+              message: { type: string }
+              at: { type: string }
+              issueId: { type: string }
