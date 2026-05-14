@@ -179,12 +179,12 @@ function rowToIssue(
 
 export async function getCitizenByEmail(email: string): Promise<Citizen | undefined> {
   const rows = await db.select().from(citizensTable).where(eq(citizensTable.email, email.toLowerCase())).limit(1);
-  return rows[0];
+  return rows[0] as Citizen | undefined;
 }
 
 export async function getCitizenById(id: string): Promise<Citizen | undefined> {
   const rows = await db.select().from(citizensTable).where(eq(citizensTable.id, id)).limit(1);
-  return rows[0];
+  return rows[0] as Citizen | undefined;
 }
 
 export async function createCitizen(citizen: Citizen): Promise<void> {

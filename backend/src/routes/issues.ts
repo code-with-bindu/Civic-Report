@@ -102,7 +102,7 @@ router.post("/", requireUser, async (req, res) => {
 });
 
 router.delete("/:id", requireUser, async (req, res) => {
-  const issue = await getIssue(req.params.id, req.user!.id);
+  const issue = await getIssue((req.params.id as string), req.user!.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -112,12 +112,12 @@ router.delete("/:id", requireUser, async (req, res) => {
     return;
   }
 
-  await deleteIssue(req.params.id);
+  await deleteIssue((req.params.id as string));
   res.json({ success: true });
 });
 
 router.get("/:id", async (req, res) => {
-  const issue = await getIssue(req.params.id, req.user?.id);
+  const issue = await getIssue((req.params.id as string), req.user?.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -126,7 +126,7 @@ router.get("/:id", async (req, res) => {
 });
 
 router.post("/:id/confirm", requireUser, async (req, res) => {
-  const issue = await getIssue(req.params.id, req.user!.id);
+  const issue = await getIssue((req.params.id as string), req.user!.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -140,8 +140,8 @@ router.post("/:id/confirm", requireUser, async (req, res) => {
     return;
   }
 
-  await confirmIssue(req.params.id, req.user!.id);
-  const updated = await getIssue(req.params.id, req.user!.id);
+  await confirmIssue((req.params.id as string), req.user!.id);
+  const updated = await getIssue((req.params.id as string), req.user!.id);
   res.json(updated);
 });
 
@@ -150,7 +150,7 @@ router.post("/:id/status", requireUser, async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  const issue = await getIssue(req.params.id, req.user!.id);
+  const issue = await getIssue((req.params.id as string), req.user!.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -163,7 +163,7 @@ router.post("/:id/status", requireUser, async (req, res) => {
   }
 
   await updateIssueStatus(
-    req.params.id,
+    (req.params.id as string),
     parsed.data.status,
     parsed.data.deadline,
     parsed.data.note,
@@ -182,7 +182,7 @@ router.post("/:id/status", requireUser, async (req, res) => {
   }
   await notifySubscribers(issue.id, statusMsg, parsed.data.status, issue.reporterId);
 
-  const updated = await getIssue(req.params.id, req.user!.id);
+  const updated = await getIssue((req.params.id as string), req.user!.id);
   res.json(updated);
 });
 
@@ -191,7 +191,7 @@ router.post("/:id/note", requireUser, async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  const issue = await getIssue(req.params.id, req.user!.id);
+  const issue = await getIssue((req.params.id as string), req.user!.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -203,7 +203,7 @@ router.post("/:id/note", requireUser, async (req, res) => {
     return;
   }
 
-  await addIssueNote(req.params.id, parsed.data.note, req.user!.name);
+  await addIssueNote((req.params.id as string), parsed.data.note, req.user!.name);
 
   const noteMsg = `Official update on "${issue.title}": ${parsed.data.note}`;
   if (issue.reporterId) {
@@ -211,22 +211,22 @@ router.post("/:id/note", requireUser, async (req, res) => {
   }
   await notifySubscribers(issue.id, noteMsg, "note", issue.reporterId);
 
-  const updated = await getIssue(req.params.id, req.user!.id);
+  const updated = await getIssue((req.params.id as string), req.user!.id);
   res.json(updated);
 });
 
 router.get("/:id/comments", async (req, res) => {
-  const issue = await getIssue(req.params.id);
+  const issue = await getIssue((req.params.id as string));
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  const comments = await getComments(req.params.id, req.user?.id);
+  const comments = await getComments((req.params.id as string), req.user?.id);
   res.json(comments);
 });
 
 router.post("/:id/comments", requireUser, async (req, res) => {
-  const issue = await getIssue(req.params.id);
+  const issue = await getIssue((req.params.id as string));
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
@@ -239,7 +239,7 @@ router.post("/:id/comments", requireUser, async (req, res) => {
 
   const comment = await addComment({
     id: uid("c_"),
-    issueId: req.params.id,
+    issueId: (req.params.id as string),
     authorId: req.user!.id,
     authorName: req.user!.name,
     authorRole: req.user!.role as "citizen" | "government" | "guest",
@@ -266,12 +266,12 @@ router.post("/:id/comments", requireUser, async (req, res) => {
 });
 
 router.post("/:id/comments/:commentId/upvote", requireUser, async (req, res) => {
-  const issue = await getIssue(req.params.id);
+  const issue = await getIssue((req.params.id as string));
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  const commentRow = await getCommentById(req.params.commentId);
+  const commentRow = await getCommentById((req.params.commentId as string));
   if (!commentRow) {
     res.status(404).json({ error: "comment_not_found" });
     return;
@@ -281,7 +281,7 @@ router.post("/:id/comments/:commentId/upvote", requireUser, async (req, res) => 
     return;
   }
 
-  const result = await toggleCommentUpvote(req.params.commentId, req.user!.id);
+  const result = await toggleCommentUpvote((req.params.commentId as string), req.user!.id);
   res.json({
     id: commentRow.id,
     issueId: commentRow.issueId,
@@ -296,24 +296,24 @@ router.post("/:id/comments/:commentId/upvote", requireUser, async (req, res) => 
 });
 
 router.post("/:id/subscribe", requireUser, async (req, res) => {
-  const issue = await getIssue(req.params.id, req.user!.id);
+  const issue = await getIssue((req.params.id as string), req.user!.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  await addSubscriber(req.params.id, req.user!.id);
-  const updated = await getIssue(req.params.id, req.user!.id);
+  await addSubscriber((req.params.id as string), req.user!.id);
+  const updated = await getIssue((req.params.id as string), req.user!.id);
   res.json(updated);
 });
 
 router.post("/:id/unsubscribe", requireUser, async (req, res) => {
-  const issue = await getIssue(req.params.id, req.user!.id);
+  const issue = await getIssue((req.params.id as string), req.user!.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  await removeSubscriber(req.params.id, req.user!.id);
-  const updated = await getIssue(req.params.id, req.user!.id);
+  await removeSubscriber((req.params.id as string), req.user!.id);
+  const updated = await getIssue((req.params.id as string), req.user!.id);
   res.json(updated);
 });
 
