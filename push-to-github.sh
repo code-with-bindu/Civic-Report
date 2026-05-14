@@ -7,8 +7,16 @@ TEMP_DIR=$(mktemp -d)
 echo "==> Copying project files..."
 cp -r . "$TEMP_DIR"
 
-# Remove junk
+# Remove files that should not go to GitHub
 rm -rf "$TEMP_DIR/node_modules" \
+       "$TEMP_DIR/frontend/node_modules" \
+       "$TEMP_DIR/backend/node_modules" \
+       "$TEMP_DIR/backend/dist" \
+       "$TEMP_DIR/database/node_modules" \
+       "$TEMP_DIR/lib/api-client-react/node_modules" \
+       "$TEMP_DIR/lib/api-spec/node_modules" \
+       "$TEMP_DIR/lib/api-zod/node_modules" \
+       "$TEMP_DIR/scripts/node_modules" \
        "$TEMP_DIR/.local" \
        "$TEMP_DIR/attached_assets" \
        "$TEMP_DIR/mockup-sandbox" \
