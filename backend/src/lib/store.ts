@@ -402,7 +402,9 @@ export async function confirmIssue(issueId: string, userId: string): Promise<{ a
 
   if (existing.length > 0) return { alreadyConfirmed: true };
 
-  await db.insert(issueConfirmationsTable).values({ issueId, userId });
+  const insertResult = await db.insert(issueConfirmationsTable).values({ issueId, userId }).onConflictDoNothing().returning();
+  if (insertResult.length === 0) return { alreadyConfirmed: true };
+
 
   // Increment confirmations and recompute authenticity
   const rows = await db.select().from(issuesTable).where(eq(issuesTable.id, issueId)).limit(1);
@@ -692,4 +694,8 @@ export async function seedIfEmpty(): Promise<void> {
       timeline,
     });
   }
+}
+
+export async function deleteIssue(id: string): Promise<void> {
+  await db.delete(issuesTable).where(eq(issuesTable.id, id));
 }

@@ -38,6 +38,7 @@ import {
   Send,
   BadgeCheck,
   ArrowUp,
+  Trash2,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow, format, differenceInDays } from "date-fns";
@@ -144,6 +145,22 @@ export default function IssueDetail() {
     onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/issues/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Issue deleted" });
+      navigate("/citizen");
+    },
+    onError: (err: any) => toast({ title: "Failed to delete", description: err.message, variant: "destructive" }),
+  });
+
   const handleConfirm = async () => {
     try {
       await confirmMut.mutateAsync({ id });
@@ -235,6 +252,7 @@ export default function IssueDetail() {
   const canConfirm =
     user?.role === "citizen" &&
     !isReporter &&
+    !issue.confirmedByUser &&
     issue.status !== "resolved" &&
     issue.status !== "rejected";
 
@@ -301,6 +319,21 @@ export default function IssueDetail() {
                 {issue.title}
               </h1>
               <div className="flex gap-2 shrink-0">
+                {isReporter && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      if (confirm("Are you sure you want to delete this report? This action cannot be undone.")) {
+                        deleteMut.mutate();
+                      }
+                    }}
+                    disabled={deleteMut.isPending}
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" />
+                    Delete
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant={isSubscribed ? "default" : "outline"}

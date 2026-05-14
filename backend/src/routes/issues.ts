@@ -22,6 +22,7 @@ import {
   pushNotification,
   getStateForConstituency,
   uid,
+  deleteIssue,
 } from "../lib/store.js";
 import { attachUser, requireUser } from "../lib/auth.js";
 
@@ -100,6 +101,21 @@ router.post("/", requireUser, async (req, res) => {
   res.json(issue);
 });
 
+router.delete("/:id", requireUser, async (req, res) => {
+  const issue = await getIssue(req.params.id, req.user!.id);
+  if (!issue) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (issue.reporterId !== req.user!.id) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+
+  await deleteIssue(req.params.id);
+  res.json({ success: true });
+});
+
 router.get("/:id", async (req, res) => {
   const issue = await getIssue(req.params.id, req.user?.id);
   if (!issue) {
@@ -137,10 +153,6 @@ router.post("/:id/status", requireUser, async (req, res) => {
   const issue = await getIssue(req.params.id, req.user!.id);
   if (!issue) {
     res.status(404).json({ error: "not_found" });
-    return;
-  }
-  if (issue.constituency !== req.user!.constituency) {
-    res.status(403).json({ error: "wrong_constituency" });
     return;
   }
 

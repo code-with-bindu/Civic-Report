@@ -260,6 +260,7 @@ export default function Landing() {
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (createReviewMut.isPending) return;
     if (!reviewText.trim()) return;
     try {
       await createReviewMut.mutateAsync({ data: { rating: reviewRating, text: reviewText.trim() } });
