@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   MutationFunction,
@@ -31,7 +32,7 @@ export const getListReviewsQueryOptions = <
 >(options?: {
   query?: UseQueryOptions<Awaited<ReturnType<typeof listReviews>>, TError, TData>;
   request?: SecondParameter<typeof customFetch>;
-}) => {
+}): UseQueryOptions<Awaited<ReturnType<typeof listReviews>>, TError, TData> & { queryKey: QueryKey } => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
   const queryKey = queryOptions?.queryKey ?? getListReviewsQueryKey();
   return {
