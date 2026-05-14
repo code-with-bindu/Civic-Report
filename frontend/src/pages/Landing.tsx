@@ -1,13 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useGetPublicStats,
   getGetPublicStatsQueryKey,
   useListIssues,
   getListIssuesQueryKey,
+  useListReviews,
+  getListReviewsQueryKey,
+  useCreateReview,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import {
   ArrowRight,
   Shield,
@@ -34,6 +41,9 @@ import {
   BarChart3,
   Smartphone,
   Sparkles,
+  Star,
+  PenLine,
+  X,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
@@ -149,36 +159,36 @@ const FEATURES = [
   },
 ];
 
-const TESTIMONIALS = [
+const FALLBACK_TESTIMONIALS = [
   {
-    quote:
-      "Reported a pothole on Ring Road and it was filled in 4 days. This actually works.",
+    quote: "Reported a pothole on Ring Road and it was filled in 4 days. This actually works.",
     name: "Priya S.",
     role: "Citizen, New Delhi",
+    rating: 5,
   },
   {
-    quote:
-      "The community confirmation feature is brilliant — no more fake complaints clogging the system.",
+    quote: "The community confirmation feature is brilliant — no more fake complaints clogging the system.",
     name: "Rajesh K.",
     role: "MLA, Karol Bagh",
+    rating: 5,
   },
   {
-    quote:
-      "I used to call the municipal office for hours. Now I just open CivicReport.",
+    quote: "I used to call the municipal office for hours. Now I just open CivicReport.",
     name: "Anita M.",
     role: "Resident",
+    rating: 4,
   },
   {
-    quote:
-      "Transparent timelines mean my constituents trust us more. Best tool we've adopted.",
+    quote: "Transparent timelines mean my constituents trust us more. Best tool we've adopted.",
     name: "Vikram R.",
     role: "Government Official",
+    rating: 5,
   },
   {
-    quote:
-      "Got 50 streetlights fixed in my colony in a month. The dashboard makes it easy to follow up.",
+    quote: "Got 50 streetlights fixed in my colony in a month. The dashboard makes it easy to follow up.",
     name: "Meera J.",
     role: "Resident Welfare Association",
+    rating: 4,
   },
 ];
 
@@ -226,6 +236,10 @@ function Scroller({
 }
 
 export default function Landing() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const { data: stats } = useGetPublicStats({
     query: { queryKey: getGetPublicStatsQueryKey() },
   });
@@ -234,6 +248,38 @@ export default function Landing() {
     { scope: "community" },
     { query: { queryKey: getListIssuesQueryKey({ scope: "community" }) } },
   );
+
+  const { data: reviewsData } = useListReviews({
+    query: { queryKey: getListReviewsQueryKey() },
+  });
+
+  const createReviewMut = useCreateReview();
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewText.trim()) return;
+    try {
+      await createReviewMut.mutateAsync({ data: { rating: reviewRating, text: reviewText.trim() } });
+      queryClient.invalidateQueries({ queryKey: getListReviewsQueryKey() });
+      setReviewText("");
+      setShowReviewForm(false);
+      toast({ title: "Thank you!", description: "Your review has been shared with the community." });
+    } catch (err: any) {
+      toast({ title: "Failed to submit", description: err.message || "Please try again", variant: "destructive" });
+    }
+  };
+
+  const testimonials = reviewsData && reviewsData.length > 0
+    ? reviewsData.map((r) => ({
+        quote: r.text,
+        name: r.userName,
+        role: r.userRole === "government" ? "Government Official" : "Citizen",
+        rating: r.rating,
+      }))
+    : FALLBACK_TESTIMONIALS;
 
   // Marquee auto-scroll for testimonials
   const marqueeRef = useRef<HTMLDivElement>(null);
@@ -617,29 +663,114 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Testimonials marquee */}
+      {/* Reviews marquee */}
       <section className="py-16 bg-background overflow-hidden">
         <div className="container mx-auto px-4 mb-6">
-          <h2 className="text-3xl font-bold text-foreground mb-2">
-            Real voices, real change
-          </h2>
-          <p className="text-muted-foreground">
-            What citizens and officials are saying about CivicReport.
-          </p>
+          <div className="flex items-end justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-foreground mb-2">
+                Real voices, real change
+              </h2>
+              <p className="text-muted-foreground">
+                {reviewsData && reviewsData.length > 0
+                  ? `${reviewsData.length} review${reviewsData.length !== 1 ? "s" : ""} from citizens and officials.`
+                  : "What citizens and officials are saying about CivicReport."}
+              </p>
+            </div>
+            {user && user.role !== "guest" && !showReviewForm && (
+              <Button
+                variant="outline"
+                className="hidden sm:flex gap-2"
+                onClick={() => setShowReviewForm(true)}
+              >
+                <PenLine className="w-4 h-4" />
+                Share your story
+              </Button>
+            )}
+            {!user && (
+              <Link href="/citizen/auth">
+                <Button variant="outline" className="hidden sm:flex gap-2">
+                  <PenLine className="w-4 h-4" />
+                  Write a review
+                </Button>
+              </Link>
+            )}
+          </div>
+
+          {showReviewForm && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 bg-card border border-border rounded-xl p-6 shadow-sm max-w-xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground">Share your experience</h3>
+                <button onClick={() => setShowReviewForm(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <form onSubmit={handleSubmitReview} className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium mb-2">Rating</p>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setReviewRating(star)}
+                        className="focus:outline-none"
+                      >
+                        <Star
+                          className={`w-7 h-7 transition-colors ${star <= reviewRating ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30"}`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Textarea
+                    placeholder="Tell us about your experience with CivicReport..."
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    required
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 text-right">{reviewText.length}/500</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={createReviewMut.isPending || !reviewText.trim()}>
+                    {createReviewMut.isPending ? "Submitting..." : "Submit review"}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowReviewForm(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          )}
         </div>
 
         <div
           ref={marqueeRef}
           className="flex gap-4 overflow-x-auto no-scrollbar px-4"
-          aria-label="Testimonials"
+          aria-label="Reviews"
         >
-          {[...TESTIMONIALS, ...TESTIMONIALS].map((t, i) => (
+          {[...testimonials, ...testimonials].map((t, i) => (
             <Card
               key={i}
               className="shrink-0 w-80 bg-card border-border shadow-sm"
             >
               <CardContent className="p-6">
-                <Quote className="w-6 h-6 text-primary/40 mb-3" />
+                <div className="flex gap-0.5 mb-3">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`w-4 h-4 ${star <= t.rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground/20"}`}
+                    />
+                  ))}
+                </div>
                 <p className="text-foreground leading-relaxed mb-4 text-sm">
                   "{t.quote}"
                 </p>

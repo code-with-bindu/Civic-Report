@@ -88,12 +88,17 @@ export default function CitizenDashboard() {
     return Array.from(set).sort();
   }, [officials]);
 
-  // default state once officials load
+  // default state: prefer user's registered state, then first official's state
   useEffect(() => {
-    if (!areaState && states.length > 0) {
-      setAreaState(states[0]);
+    if (!areaState) {
+      const preferred = (user as any)?.state as string | undefined;
+      if (preferred) {
+        setAreaState(preferred);
+      } else if (states.length > 0) {
+        setAreaState(states[0]);
+      }
     }
-  }, [states, areaState]);
+  }, [states, areaState, user]);
 
   // pick query args based on tab
   const queryArgs = useMemo(() => {

@@ -11,6 +11,8 @@ export type SessionUser = {
   constituency?: string;
   officialId?: string;
   reputation?: number;
+  city?: string;
+  state?: string;
 };
 
 function b64url(input: Buffer | string): string {

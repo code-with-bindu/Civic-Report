@@ -25,7 +25,7 @@ router.post("/citizen/register", async (req, res) => {
     res.status(400).json({ error: "invalid_body" });
     return;
   }
-  const { name, email, password } = parsed.data;
+  const { name, email, password, city, state } = parsed.data;
   const existing = await getCitizenByEmail(email);
   if (existing) {
     res.status(409).json({ error: "email_exists" });
@@ -38,8 +38,10 @@ router.post("/citizen/register", async (req, res) => {
     email: email.toLowerCase(),
     passwordHash: hashPassword(password),
     reputation: 0,
+    city,
+    state,
   });
-  const user: SessionUser = { id, role: "citizen", name, email: email.toLowerCase(), reputation: 0 };
+  const user: SessionUser = { id, role: "citizen", name, email: email.toLowerCase(), reputation: 0, city, state };
   res.json(buildResponse(user));
 });
 
@@ -55,7 +57,7 @@ router.post("/citizen/login", async (req, res) => {
     res.status(401).json({ error: "invalid_credentials" });
     return;
   }
-  const user: SessionUser = { id: c.id, role: "citizen", name: c.name, email: c.email, reputation: c.reputation };
+  const user: SessionUser = { id: c.id, role: "citizen", name: c.name, email: c.email, reputation: c.reputation, city: c.city, state: c.state };
   res.json(buildResponse(user));
 });
 

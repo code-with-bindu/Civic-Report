@@ -21,6 +21,8 @@ export default function CitizenAuth() {
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
+  const [registerCity, setRegisterCity] = useState("");
+  const [registerState, setRegisterState] = useState("");
 
   const loginMut = useLoginCitizen();
   const registerMut = useRegisterCitizen();
@@ -40,7 +42,7 @@ export default function CitizenAuth() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await registerMut.mutateAsync({ data: { name: registerName, email: registerEmail, password: registerPassword } });
+      const res = await registerMut.mutateAsync({ data: { name: registerName, email: registerEmail, password: registerPassword, city: registerCity || undefined, state: registerState || undefined } });
       login(res.token, res.user);
       setLocation("/citizen");
     } catch (err: any) {
@@ -115,6 +117,16 @@ export default function CitizenAuth() {
                   <div className="space-y-2">
                     <Label htmlFor="register-password">Password</Label>
                     <Input id="register-password" type="password" required value={registerPassword} onChange={(e) => setRegisterPassword(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="register-city">City</Label>
+                      <Input id="register-city" placeholder="e.g. Phagwara" value={registerCity} onChange={(e) => setRegisterCity(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="register-state">State</Label>
+                      <Input id="register-state" placeholder="e.g. Punjab" value={registerState} onChange={(e) => setRegisterState(e.target.value)} />
+                    </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={registerMut.isPending}>
                     {registerMut.isPending ? "Creating account..." : "Sign Up"}

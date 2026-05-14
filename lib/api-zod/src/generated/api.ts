@@ -18,6 +18,13 @@ export const RegisterCitizenBody = zod.object({
   name: zod.string(),
   email: zod.string(),
   password: zod.string(),
+  city: zod.string().optional(),
+  state: zod.string().optional(),
+});
+
+export const CreateReviewBody = zod.object({
+  rating: zod.number().int().min(1).max(5),
+  text: zod.string().min(1).max(500),
 });
 
 export const RegisterCitizenResponse = zod.object({

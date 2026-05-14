@@ -9,6 +9,7 @@ import {
   commentsTable,
   commentUpvotesTable,
   notificationsTable,
+  reviewsTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 
@@ -66,6 +67,18 @@ export type Citizen = {
   email: string;
   passwordHash: string;
   reputation: number;
+  city?: string;
+  state?: string;
+};
+
+export type Review = {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  rating: number;
+  text: string;
+  createdAt: string;
 };
 
 export type Notification = {
@@ -181,6 +194,35 @@ export async function createCitizen(citizen: Citizen): Promise<void> {
     email: citizen.email,
     passwordHash: citizen.passwordHash,
     reputation: citizen.reputation,
+    city: citizen.city,
+    state: citizen.state,
+  });
+}
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+
+export async function listReviews(): Promise<Review[]> {
+  const rows = await db.select().from(reviewsTable).orderBy(desc(reviewsTable.createdAt));
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    userName: r.userName,
+    userRole: r.userRole,
+    rating: r.rating,
+    text: r.text,
+    createdAt: r.createdAt,
+  }));
+}
+
+export async function createReview(review: Review): Promise<void> {
+  await db.insert(reviewsTable).values({
+    id: review.id,
+    userId: review.userId,
+    userName: review.userName,
+    userRole: review.userRole,
+    rating: review.rating,
+    text: review.text,
+    createdAt: review.createdAt,
   });
 }
 

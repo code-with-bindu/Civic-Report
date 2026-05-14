@@ -15,4 +15,6 @@ export interface User {
   constituency?: string;
   officialId?: string;
   reputation?: number;
+  city?: string;
+  state?: string;
 }

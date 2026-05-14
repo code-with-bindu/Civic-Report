@@ -29,6 +29,8 @@ export interface User {
   constituency?: string;
   officialId?: string;
   reputation?: number;
+  city?: string;
+  state?: string;
 }
 
 export interface AuthResponse {
@@ -152,6 +154,23 @@ export type RegisterCitizenBody = {
   name: string;
   email: string;
   password: string;
+  city?: string;
+  state?: string;
+};
+
+export interface Review {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  rating: number;
+  text: string;
+  createdAt: string;
+}
+
+export type CreateReviewBody = {
+  rating: number;
+  text: string;
 };
 
 export type LoginCitizenBody = {

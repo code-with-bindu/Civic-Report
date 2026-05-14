@@ -6,6 +6,18 @@ export const citizensTable = pgTable("citizens", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   reputation: integer("reputation").notNull().default(0),
+  city: text("city"),
+  state: text("state"),
+});
+
+export const reviewsTable = pgTable("reviews", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  userName: text("user_name").notNull(),
+  userRole: text("user_role").notNull(),
+  rating: integer("rating").notNull(),
+  text: text("text").notNull(),
+  createdAt: text("created_at").notNull(),
 });
 
 export const issuesTable = pgTable("issues", {

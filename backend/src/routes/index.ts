@@ -5,6 +5,7 @@ import officialsRouter from "./officials.js";
 import issuesRouter from "./issues.js";
 import notificationsRouter from "./notifications.js";
 import statsRouter from "./stats.js";
+import reviewsRouter from "./reviews.js";
 import { attachUser } from "../lib/auth.js";
 
 const router: IRouter = Router();
@@ -16,5 +17,6 @@ router.use(officialsRouter);
 router.use("/issues", issuesRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/stats", statsRouter);
+router.use(reviewsRouter);
 
 export default router;
