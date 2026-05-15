@@ -1,6 +1,4 @@
 {
-  "buildCommand": "pnpm --filter @workspace/civicreport run build",
-  "outputDirectory": "frontend/dist/public",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
