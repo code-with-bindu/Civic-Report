@@ -758,7 +758,7 @@ export default function Landing() {
           className="flex gap-4 overflow-x-auto no-scrollbar px-4"
           aria-label="Reviews"
         >
-          {[...testimonials, ...testimonials].map((t, i) => (
+          {testimonials.map((t, i) => (
             <Card
               key={i}
               className="shrink-0 w-80 bg-card border-border shadow-sm"
@@ -862,3 +862,4 @@ export default function Landing() {
     </div>
   );
 }
+
