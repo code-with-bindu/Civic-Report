@@ -2,11 +2,6 @@
   "version": 2,
   "buildCommand": "pnpm --filter @workspace/civicreport run build && pnpm --filter @workspace/api-server run build",
   "outputDirectory": "frontend/dist/public",
-  "functions": {
-    "backend/dist/index.mjs": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/api/:path*",
