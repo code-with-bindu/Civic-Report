@@ -78,7 +78,7 @@ export default function IssueDetail() {
   const { data: comments = [] } = useQuery<any[]>({
     queryKey: commentsQueryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/issues/${id}/comments`);
+      const res = await fetch(`${API_BASE}/api/issues/${id}/comments`);
       return res.json();
     },
     enabled: !!id,
@@ -87,7 +87,7 @@ export default function IssueDetail() {
 
   const postCommentMut = useMutation({
     mutationFn: async (text: string) => {
-      const res = await fetch(`/api/issues/${id}/comments`, {
+      const res = await fetch(`${API_BASE}/api/issues/${id}/comments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -108,7 +108,7 @@ export default function IssueDetail() {
 
   const upvoteCommentMut = useMutation({
     mutationFn: async (commentId: string) => {
-      const res = await fetch(`/api/issues/${id}/comments/${commentId}/upvote`, {
+      const res = await fetch(`${API_BASE}/api/issues/${id}/comments/${commentId}/upvote`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -149,7 +149,7 @@ export default function IssueDetail() {
 
   const deleteMut = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/issues/${id}`, {
+      const res = await fetch(`${API_BASE}/api/issues/${id}`, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -721,4 +721,5 @@ export default function IssueDetail() {
     </div>
   );
 }
+
 
