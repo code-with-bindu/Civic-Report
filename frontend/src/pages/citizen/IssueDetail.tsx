@@ -44,8 +44,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow, format, differenceInDays } from "date-fns";
 import { motion } from "framer-motion";
 
+const API_BASE = "https://workspaceapi-server-production-68ec.up.railway.app";
+
 async function apiPost(path: string, token: string | null) {
-  const res = await fetch(path, {
+  const res = await fetch(API_BASE + path, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
@@ -719,3 +721,4 @@ export default function IssueDetail() {
     </div>
   );
 }
+
