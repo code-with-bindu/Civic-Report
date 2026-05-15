@@ -1,15 +1,7 @@
 {
-  "version": 2,
-  "buildCommand": "pnpm --filter @workspace/civicreport run build && pnpm --filter @workspace/api-server run build",
+  "buildCommand": "pnpm --filter @workspace/civicreport run build",
   "outputDirectory": "frontend/dist/public",
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "backend/dist/index.mjs"
-    },
-    {
-      "source": "/:path*",
-      "destination": "/index.html"
-    }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
